@@ -25,9 +25,6 @@ package net.solarnetwork.web.jakarta.security;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.core.Ordered;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -36,6 +33,9 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.web.servlet.HandlerExceptionResolver;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import net.solarnetwork.codec.JsonUtils;
 import net.solarnetwork.util.ByteUtils;
 import net.solarnetwork.web.jakarta.domain.Response;
@@ -61,6 +61,13 @@ public class SecurityTokenAuthenticationEntryPoint
 		headers.put("Access-Control-Allow-Headers",
 				"Authorization, Content-MD5, Content-Type, Digest, X-SN-Date");
 		return headers;
+	}
+
+	/**
+	 * Constructor.
+	 */
+	public SecurityTokenAuthenticationEntryPoint() {
+		super();
 	}
 
 	@Override
