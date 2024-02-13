@@ -224,8 +224,8 @@ public enum ConfigurationKey implements net.solarnetwork.ocpp.domain.Configurati
 	StopTxnSampledDataMaxLength(Integer),
 
 	/**
-	 * A list of supported {@link net.solarnetwork.ocpp.v16.FeatureProfile}
-	 * values.
+	 * A list of supported
+	 * {@link net.solarnetwork.ocpp.v16.jakarta.FeatureProfile} values.
 	 */
 	SupportedFeatureProfiles(CSL),
 
