@@ -1,21 +1,21 @@
 /* ==================================================================
  * OcppWebSocketHandlerV16Tests.java - 28/10/2020 4:26:33 pm
- * 
+ *
  * Copyright 2020 SolarNetwork.net Dev Team
- * 
- * This program is free software; you can redistribute it and/or 
- * modify it under the terms of the GNU General Public License as 
- * published by the Free Software Foundation; either version 2 of 
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation; either version 2 of
  * the License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful, 
- * but WITHOUT ANY WARRANTY; without even the implied warranty of 
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU 
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License for more details.
- * 
- * You should have received a copy of the GNU General Public License 
- * along with this program; if not, write to the Free Software 
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
  * 02111-1307 USA
  * ==================================================================
  */
@@ -45,6 +45,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import net.solarnetwork.codec.JsonUtils;
 import net.solarnetwork.ocpp.domain.ActionMessage;
 import net.solarnetwork.ocpp.domain.ChargePointIdentity;
+import net.solarnetwork.ocpp.json.WebSocketSubProtocol;
 import net.solarnetwork.ocpp.service.ActionMessageResultHandler;
 import net.solarnetwork.ocpp.v201.domain.Action;
 import net.solarnetwork.ocpp.v201.service.ErrorCodeResolver;
@@ -61,7 +62,7 @@ import ocpp.v201.HeartbeatResponse;
 /**
  * Test cases for the {@link OcppWebSocketHandler} class using OCPP 2.0.1
  * actions.
- * 
+ *
  * @author matt
  * @version 1.0
  */
@@ -79,7 +80,8 @@ public class OcppWebSocketHandlerV201Tests {
 		ObjectMapper mapper = defaultObjectMapper();
 		session = EasyMock.createMock(WebSocketSession.class);
 		handler = new OcppWebSocketHandler<>(Action.class, Action.class, new ErrorCodeResolver(),
-				new TaskExecutorAdapter(new CallingThreadExecutorService()), mapper);
+				new TaskExecutorAdapter(new CallingThreadExecutorService()), mapper,
+				WebSocketSubProtocol.OCPP_V201.getValue());
 		ActionPayloadDecoder decoder = new ActionPayloadDecoder(OcppUtils.ocppSchemaFactory_v201());
 		handler.setChargePointActionPayloadDecoder(decoder);
 		handler.setCentralServiceActionPayloadDecoder(decoder);

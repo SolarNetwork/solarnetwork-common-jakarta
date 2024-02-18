@@ -1,33 +1,33 @@
 /* ==================================================================
  * OcppWebSocketHandler.java - 31/01/2020 3:34:19 pm
- * 
+ *
  * Copyright 2020 SolarNetwork.net Dev Team
- * 
- * This program is free software; you can redistribute it and/or 
- * modify it under the terms of the GNU General Public License as 
- * published by the Free Software Foundation; either version 2 of 
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation; either version 2 of
  * the License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful, 
- * but WITHOUT ANY WARRANTY; without even the implied warranty of 
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU 
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License for more details.
- * 
- * You should have received a copy of the GNU General Public License 
- * along with this program; if not, write to the Free Software 
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
  * 02111-1307 USA
  * ==================================================================
  */
 
 package net.solarnetwork.ocpp.web.jakarta.json;
 
-import static java.util.Collections.singletonList;
 import static net.solarnetwork.util.ObjectUtils.requireNonNullArgument;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.LinkedHashSet;
@@ -85,7 +85,7 @@ import net.solarnetwork.settings.SettingsChangeObserver;
 
 /**
  * OCPP Charge Point JSON web socket handler.
- * 
+ *
  * <p>
  * This class is responsible for encoding/decoding the OCPP JSON web socket
  * message protocol. When a Charge Point sends a message to this service, the
@@ -97,7 +97,7 @@ import net.solarnetwork.settings.SettingsChangeObserver;
  * with the final result (or error), and that will be encoded into a JSON
  * message and sent back to the originating Charge Point client.
  * </p>
- * 
+ *
  * <p>
  * This class also implements {@link ChargePointBroker}, so that other classes
  * can push messages to any connected Charge Point client. The
@@ -107,13 +107,13 @@ import net.solarnetwork.settings.SettingsChangeObserver;
  * Point client sends a result (or error) response to the message, it will be
  * passed to the {@link ActionMessageResultHandler} originally provided.
  * </p>
- * 
+ *
  * @param <C>
  *        the charge point action enumeration to use
  * @param <S>
  *        the central system action enumeration to use
  * @author matt
- * @version 2.2
+ * @version 2.3
  */
 public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> & Action>
 		extends AbstractWebSocketHandler
@@ -138,6 +138,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 	private final ConcurrentMap<ChargePointIdentity, WebSocketSession> clientSessions;
 	private final ActionMessageQueue pendingMessages;
 	private final ObjectMapper mapper;
+	private final List<String> subProtocols;
 	private TaskScheduler taskScheduler;
 	private ActionPayloadDecoder centralServiceActionPayloadDecoder;
 	private ActionPayloadDecoder chargePointActionPayloadDecoder;
@@ -150,11 +151,11 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	/**
 	 * Constructor.
-	 * 
+	 *
 	 * <p>
 	 * An in-memory queue will be used for pending messages.
 	 * </p>
-	 * 
+	 *
 	 * @param chargePointActionClass
 	 *        the charge point action class
 	 * @param centralSystemActionClass
@@ -165,9 +166,12 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 	 *        an executor for tasks
 	 * @param mapper
 	 *        the object mapper to use
+	 * @param subProtocols
+	 *        the OCPP protocols to support
 	 */
 	public OcppWebSocketHandler(Class<C> chargePointActionClass, Class<S> centralSystemActionClass,
-			ErrorCodeResolver errorCodeResolver, AsyncTaskExecutor executor, ObjectMapper mapper) {
+			ErrorCodeResolver errorCodeResolver, AsyncTaskExecutor executor, ObjectMapper mapper,
+			String... subProtocols) {
 		super();
 		this.chargePointActionClass = chargePointActionClass;
 		this.centralSystemActionClass = centralSystemActionClass;
@@ -177,11 +181,13 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 		this.clientSessions = new ConcurrentHashMap<>(8, 0.7f, 2);
 		this.pendingMessages = new SimpleActionMessageQueue();
 		this.mapper = mapper;
+		this.subProtocols = Arrays.asList(subProtocols != null ? subProtocols
+				: new String[] { WebSocketSubProtocol.OCPP_V16.getValue() });
 	}
 
 	/**
 	 * Constructor.
-	 * 
+	 *
 	 * @param chargePointActionClass
 	 *        the charge point action class
 	 * @param centralSystemActionClass
@@ -199,6 +205,8 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 	 * @param chargePointActionPayloadDecoder
 	 *        for Central Service message the action payload decoder to use for
 	 *        Charge Point messages
+	 * @param subProtocols
+	 *        the OCPP protocols to support
 	 * @throws IllegalArgumentException
 	 *         if any parameter is {@literal null}
 	 */
@@ -206,7 +214,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 			ErrorCodeResolver errorCodeResolver, AsyncTaskExecutor executor, ObjectMapper mapper,
 			ActionMessageQueue pendingMessageQueue,
 			ActionPayloadDecoder centralServiceActionPayloadDecoder,
-			ActionPayloadDecoder chargePointActionPayloadDecoder) {
+			ActionPayloadDecoder chargePointActionPayloadDecoder, String... subProtocols) {
 		super();
 		this.chargePointActionClass = requireNonNullArgument(chargePointActionClass,
 				"chargePointActionClass");
@@ -215,6 +223,8 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 		this.errorCodeResolver = requireNonNullArgument(errorCodeResolver, "errorCodeResolver");
 		this.executor = requireNonNullArgument(executor, "executor");
 		this.mapper = requireNonNullArgument(mapper, "mapper");
+		this.subProtocols = Arrays.asList(subProtocols != null ? subProtocols
+				: new String[] { WebSocketSubProtocol.OCPP_V16.getValue() });
 		this.pendingMessages = requireNonNullArgument(pendingMessageQueue, "pendingMessageQueue");
 		this.processors = new ConcurrentHashMap<>(16, 0.9f, 1);
 		this.clientSessions = new ConcurrentHashMap<>(8, 0.7f, 2);
@@ -389,7 +399,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	@Override
 	public List<String> getSubProtocols() {
-		return singletonList(WebSocketSubProtocol.OCPP_V16.getValue());
+		return subProtocols;
 	}
 
 	@Override
@@ -412,7 +422,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	/**
 	 * Get the charge point identity for a given session.
-	 * 
+	 *
 	 * @param session
 	 *        the session
 	 * @return the identity, or {@literal null} if not available
@@ -425,7 +435,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 	/**
 	 * Resolve an error code from a {@link RpcError} using the configured
 	 * {@link ErrorCodeResolver}.
-	 * 
+	 *
 	 * @param error
 	 *        the error to resolve
 	 * @return the code, or {@literal null} it not resolvable
@@ -482,7 +492,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	/**
 	 * Get a charge point action for an action name.
-	 * 
+	 *
 	 * @param name
 	 *        the action name
 	 * @return the action, or {@literal null} if not supported
@@ -498,7 +508,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	/**
 	 * Get a central system action for an action name.
-	 * 
+	 *
 	 * @param name
 	 *        the action name
 	 * @return the action, or {@literal null} if not supported
@@ -514,14 +524,14 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	/**
 	 * Process a request from a client Charge Point.
-	 * 
+	 *
 	 * <p>
 	 * The message payload will be decoded using
 	 * {@link #getCentralServiceActionPayloadDecoder()} and then passed to any
 	 * configured action message processors so the processor's result (or error)
 	 * can be returned to the client.
 	 * </p>
-	 * 
+	 *
 	 * @param session
 	 *        the session
 	 * @param clientId
@@ -621,7 +631,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	/**
 	 * Push a pending message to a Charge Point.
-	 * 
+	 *
 	 * @param msg
 	 *        the pending message to send; this message is expected to have been
 	 *        added to the pending message queue already
@@ -654,7 +664,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	/**
 	 * Process the next pending message, if available.
-	 * 
+	 *
 	 * @param clientId
 	 *        the ID of the client to process the next pending message
 	 * @see #processNextPendingMessage(Deque)
@@ -665,7 +675,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	/**
 	 * Process the next pending message, if available.
-	 * 
+	 *
 	 * @param q
 	 *        the queue to process the next pending message
 	 * @see #sendCall(PendingActionMessage)
@@ -694,12 +704,12 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 	/**
 	 * Process a CallError response to a Call message previously sent to a
 	 * client.
-	 * 
+	 *
 	 * <p>
 	 * If there is another message available in the pending message queue, that
 	 * message will be sent to the client.
 	 * </p>
-	 * 
+	 *
 	 * @param session
 	 *        the session
 	 * @param clientId
@@ -749,13 +759,13 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 	/**
 	 * Process a CallResult response to a Call message previously sent to a
 	 * client.
-	 * 
-	 * 
+	 *
+	 *
 	 * <p>
 	 * If there is another message available in the pending message queue, that
 	 * message will be sent to the client.
 	 * </p>
-	 * 
+	 *
 	 * @param session
 	 *        the session
 	 * @param clientId
@@ -818,7 +828,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	/**
 	 * Extension point for after an OCPP call has been sent.
-	 * 
+	 *
 	 * @param clientId
 	 *        the client ID
 	 * @param messageId
@@ -859,7 +869,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	/**
 	 * Extension point for after an OCPP call result has been sent.
-	 * 
+	 *
 	 * @param clientId
 	 *        the client ID
 	 * @param messageId
@@ -899,7 +909,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	/**
 	 * Extension point for after an OCPP call error has been sent.
-	 * 
+	 *
 	 * @param clientId
 	 *        the client ID
 	 * @param messageId
@@ -924,14 +934,14 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	/**
 	 * Process a request from a Charge Point.
-	 * 
+	 *
 	 * <p>
 	 * This method will pass the given pending message's {@link ActionMessage}
 	 * to the available {@link ActionMessageProcessor} instances that support
 	 * the message's {@link Action}. The first available processor's result (or
 	 * error) will be passed back to the Charge Point.
 	 * </p>
-	 * 
+	 *
 	 * @param msg
 	 *        the message to process
 	 */
@@ -1018,7 +1028,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	/**
 	 * Extension point for before an action message is to be processed.
-	 * 
+	 *
 	 * @param msg
 	 *        the message
 	 */
@@ -1037,7 +1047,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	/**
 	 * Extension point for before a call response is processed.
-	 * 
+	 *
 	 * @param msg
 	 *        the message
 	 * @param payload
@@ -1053,7 +1063,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	/**
 	 * Get the configured action payload decoder for Central Service messages.
-	 * 
+	 *
 	 * @return the decoder, never {@literal null}
 	 */
 	public ActionPayloadDecoder getCentralServiceActionPayloadDecoder() {
@@ -1062,7 +1072,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	/**
 	 * Set the action payload decoder for Central Service messages.
-	 * 
+	 *
 	 * @param centralServiceActionPayloadDecoder
 	 *        the decoder to use
 	 * @throws IllegalArgumentException
@@ -1076,7 +1086,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	/**
 	 * Get the configured action payload decoder for Charge Point messages.
-	 * 
+	 *
 	 * @return the decoder, never {@literal null}
 	 */
 	public ActionPayloadDecoder getChargePointActionPayloadDecoder() {
@@ -1085,7 +1095,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	/**
 	 * Set the action payload decoder for Charge Point messages.
-	 * 
+	 *
 	 * @param chargePointActionPayloadDecoder
 	 *        the decoder to use
 	 * @throws IllegalArgumentException
@@ -1099,11 +1109,11 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	/**
 	 * Add an action message processor.
-	 * 
+	 *
 	 * <p>
 	 * Once added, messages for its supported actions will be routed to it.
 	 * </p>
-	 * 
+	 *
 	 * @param processor
 	 *        to processor to add; {@literal null} will be ignored
 	 */
@@ -1126,11 +1136,11 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	/**
 	 * Remove an action message processor.
-	 * 
+	 *
 	 * <p>
 	 * Once removed, messages will no longer be routed to it.
 	 * </p>
-	 * 
+	 *
 	 * @param processor
 	 *        the processor to remove; {@literal null} will be ignored
 	 */
@@ -1145,7 +1155,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	/**
 	 * Get the object mapper.
-	 * 
+	 *
 	 * @return the object mapper, never {@literal null}
 	 */
 	public ObjectMapper getObjectMapper() {
@@ -1154,7 +1164,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	/**
 	 * Get the task scheduler.
-	 * 
+	 *
 	 * @return the task scheduler
 	 */
 	public TaskScheduler getTaskScheduler() {
@@ -1163,14 +1173,14 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	/**
 	 * Set the task scheduler.
-	 * 
+	 *
 	 * <p>
 	 * This scheduler is required for automatic maintenance tasks to run. If a
 	 * scheduler is not configured, this handler will still function but some
 	 * functions like automatically removing unhandled expired tasks will not
 	 * occur.
 	 * </p>
-	 * 
+	 *
 	 * @param taskScheduler
 	 *        the task scheduler to set
 	 */
@@ -1181,7 +1191,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 	/**
 	 * Get the timeout to expire pending messages that have not received a
 	 * response.
-	 * 
+	 *
 	 * @return the timeout, in milliseconds; defaults to
 	 *         {@link #DEFAULT_PENDING_MESSAGE_TIMEOUT}
 	 */
@@ -1192,7 +1202,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 	/**
 	 * Set the timeout to expire pending messages that have not received a
 	 * response.
-	 * 
+	 *
 	 * @param pendingMessageTimeout
 	 *        the timeout to set, in milliseconds
 	 */
@@ -1202,7 +1212,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	/**
 	 * Get the frequency at which to emit PING frames.
-	 * 
+	 *
 	 * @return the frequency in seconds, or {@literal 0} to disable; defaults to
 	 *         {@link #DEFAULT_PING_FREQUENCY_SECS}
 	 */
@@ -1212,7 +1222,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	/**
 	 * Set the frequency at which to emit PING frames.
-	 * 
+	 *
 	 * @param pingFrequencySecs
 	 *        the frequency in seconds, or {@literal 0} to disable
 	 */
