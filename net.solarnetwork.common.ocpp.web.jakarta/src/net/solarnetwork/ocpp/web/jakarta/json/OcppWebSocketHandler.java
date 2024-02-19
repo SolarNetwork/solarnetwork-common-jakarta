@@ -267,14 +267,14 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 			pendingTimeoutChore = taskScheduler.scheduleWithFixedDelay(new PendingTimeoutChore(),
 					Instant.ofEpochMilli(System.currentTimeMillis() + pendingMessageTimeout),
 					Duration.ofMillis(freq));
-			log.info("Scheduled pending timeout cleaner task at rate {}s with timeout {}s", freq / 1000,
-					pendingMessageTimeout / 1000);
+			log.info("Scheduled {} pending timeout cleaner task at rate {}s with timeout {}s",
+					subProtocols, freq / 1000, pendingMessageTimeout / 1000);
 		}
 		if ( pingChore == null && pingFrequencySecs > 0 ) {
 			long freq = TimeUnit.SECONDS.toMillis(pingFrequencySecs);
 			pingChore = taskScheduler.scheduleWithFixedDelay(new PingChore(),
 					Instant.ofEpochMilli(System.currentTimeMillis() + freq), Duration.ofMillis(freq));
-			log.info("Scheduled PING task at rate {}s", pingFrequencySecs);
+			log.info("Scheduled {} PING task at rate {}s", subProtocols, pingFrequencySecs);
 		}
 	}
 
@@ -391,7 +391,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 				}
 			}
 			if ( count > 0 ) {
-				log.info("Scheduled PING frames for {} connected charge points", count);
+				log.info("Scheduled {} PING frames for {} connected charge points", subProtocols, count);
 			}
 		}
 
