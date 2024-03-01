@@ -9,5 +9,6 @@
 		<dependency org="net.solarnetwork.common.test" name="net.solarnetwork.common.test" rev="[2.0,)"/>
 
 		<!-- Testing support -->
+		<dependency org="io.micrometer" name="micrometer-observation" rev="1.12.2" />
     </dependencies>
 </ivy-module>
