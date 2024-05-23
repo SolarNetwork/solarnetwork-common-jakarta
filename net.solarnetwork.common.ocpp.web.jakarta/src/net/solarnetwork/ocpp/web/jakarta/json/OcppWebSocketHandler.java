@@ -30,6 +30,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -113,7 +114,7 @@ import net.solarnetwork.settings.SettingsChangeObserver;
  * @param <S>
  *        the central system action enumeration to use
  * @author matt
- * @version 2.3
+ * @version 2.4
  */
 public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> & Action>
 		extends AbstractWebSocketHandler
@@ -144,7 +145,9 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 	private ActionPayloadDecoder chargePointActionPayloadDecoder;
 	private long pendingMessageTimeout = DEFAULT_PENDING_MESSAGE_TIMEOUT;
 	private int pingFrequencySecs = DEFAULT_PING_FREQUENCY_SECS;
+	private CloseStatus shutdownCloseStatus = CloseStatus.SERVICE_RESTARTED;
 
+	private boolean started;
 	private Future<?> startupTask;
 	private ScheduledFuture<?> pendingTimeoutChore;
 	private ScheduledFuture<?> pingChore;
@@ -236,7 +239,21 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 	 * Call once this service is configured.
 	 */
 	public synchronized void startup() {
-		configurationChanged(null);
+		startup(true);
+	}
+
+	/**
+	 * Call once this service is configured.
+	 *
+	 * @param scheduleJobs
+	 *        {@code true} to schedule internal task jobs
+	 * @since 2.4
+	 */
+	public synchronized void startup(boolean scheduleJobs) {
+		if ( scheduleJobs ) {
+			configurationChanged(null);
+		}
+		started = true;
 	}
 
 	/**
@@ -244,10 +261,12 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 	 * resources.
 	 */
 	public synchronized void shutdown() {
+		started = false;
 		if ( startupTask != null ) {
 			startupTask.cancel(true);
 		}
 		unshceduleChores();
+		disconnectClients();
 	}
 
 	@Override
@@ -397,6 +416,27 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	}
 
+	/**
+	 * Disconnect all connectect clients.
+	 *
+	 * <p>
+	 * The {@link #getShutdownCloseStatus()} value will be used.
+	 * </p>
+	 */
+	protected void disconnectClients() {
+		log.info("Disconnecting {} connected chargers.", clientSessions.size());
+		for ( Iterator<WebSocketSession> itr = clientSessions.values().iterator(); itr.hasNext(); ) {
+			WebSocketSession session = itr.next();
+			try {
+				session.close(shutdownCloseStatus);
+			} catch ( IOException e ) {
+				// ignore
+			} finally {
+				itr.remove();
+			}
+		}
+	}
+
 	@Override
 	public List<String> getSubProtocols() {
 		return subProtocols;
@@ -404,6 +444,10 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	@Override
 	public void afterConnectionEstablished(WebSocketSession session) throws Exception {
+		if ( !started ) {
+			session.close(shutdownCloseStatus);
+			return;
+		}
 		// save client session association
 		ChargePointIdentity clientId = clientId(session);
 		if ( clientId != null ) {
@@ -1228,6 +1272,30 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 	 */
 	public void setPingFrequency(int pingFrequencySecs) {
 		this.pingFrequencySecs = pingFrequencySecs;
+	}
+
+	/**
+	 * Get the close status to issue to active sessions when {@link #shutdown()}
+	 * is invoked.
+	 *
+	 * @return the close status; defaults to
+	 *         {@link CloseStatus#SERVICE_RESTARTED}.
+	 * @since 2.4
+	 */
+	public CloseStatus getShutdownCloseStatus() {
+		return shutdownCloseStatus;
+	}
+
+	/**
+	 * Set the close status to issue to active sessions when {@link #shutdown()}
+	 * is invoked.
+	 *
+	 * @param shutdownCloseStatus
+	 *        the status to use
+	 * @since 2.4
+	 */
+	public void setShutdownCloseStatus(CloseStatus shutdownCloseStatus) {
+		this.shutdownCloseStatus = shutdownCloseStatus;
 	}
 
 }
