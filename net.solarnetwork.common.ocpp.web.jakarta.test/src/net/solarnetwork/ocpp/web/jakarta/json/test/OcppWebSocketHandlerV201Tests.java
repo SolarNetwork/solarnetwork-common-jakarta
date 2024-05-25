@@ -112,6 +112,7 @@ public class OcppWebSocketHandlerV201Tests {
 
 		// WHEN
 		replayAll();
+		handler.startup(false);
 		handler.afterConnectionEstablished(session);
 		TextMessage msg = new TextMessage("[2,\"1603881305171\",\"Heartbeat\",{}]");
 		handler.handleMessage(session, msg);
@@ -148,6 +149,7 @@ public class OcppWebSocketHandlerV201Tests {
 
 		// WHEN
 		replayAll();
+		handler.startup(false);
 		handler.afterConnectionEstablished(session);
 		TextMessage msg = new TextMessage("[2,\"1603881305171\",\"Heartbeat\",{}]");
 		handler.handleMessage(session, msg);
@@ -183,6 +185,7 @@ public class OcppWebSocketHandlerV201Tests {
 
 		// WHEN
 		replayAll();
+		handler.startup(false);
 		handler.afterConnectionEstablished(session);
 		TextMessage msg = new TextMessage("[2,\"1603881305171\",\"Heartbeat\",{}]");
 		handler.handleMessage(session, msg);
@@ -192,6 +195,38 @@ public class OcppWebSocketHandlerV201Tests {
 		assertThat("Heartbeat response message sent", outMsg, notNullValue());
 		assertThat("Heartbeat response message content", outMsg.getPayload(), is(equalTo(
 				"[4,\"1603881305171\",\"SecurityError\",\"Authorization error handling action.\",{}]")));
+	}
+
+	@Test
+	public void closeOnShutdown() throws Exception {
+		// GIVEN
+		final Clock fixed = Clock.fixed(Instant.now(), ZoneOffset.UTC);
+		final ChargePointIdentity cpIdent = new ChargePointIdentity("foo", "user");
+		final Map<String, Object> sessionAttributes = Collections
+				.singletonMap(OcppWebSocketHandshakeInterceptor.CLIENT_ID_ATTR, cpIdent);
+		expect(session.getAttributes()).andReturn(sessionAttributes).anyTimes();
+		handler.addActionMessageProcessor(new HeartbeatProcessor(fixed));
+
+		// send HeartbeatResponse
+		Capture<TextMessage> outMessageCaptor = Capture.newInstance();
+		session.sendMessage(capture(outMessageCaptor));
+
+		// close on shutdown
+		session.close(handler.getShutdownCloseStatus());
+
+		// WHEN
+		replayAll();
+		handler.startup(false);
+		handler.afterConnectionEstablished(session);
+		TextMessage msg = new TextMessage("[2,\"1603881305171\",\"Heartbeat\",{}]");
+		handler.handleMessage(session, msg);
+		handler.shutdown();
+
+		// THEN
+		TextMessage outMsg = outMessageCaptor.getValue();
+		assertThat("Heartbeat response message sent", outMsg, notNullValue());
+		assertThat("Heartbeat response message content", outMsg.getPayload()
+				.matches("\\[3,\"1603881305171\",\\{\"currentTime\":\"[^\"]+\"\\}\\]"), equalTo(true));
 	}
 
 }
