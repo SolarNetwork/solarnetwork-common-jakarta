@@ -37,12 +37,14 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ConcurrentNavigableMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.task.AsyncTaskExecutor;
@@ -63,6 +65,7 @@ import net.solarnetwork.ocpp.domain.Action;
 import net.solarnetwork.ocpp.domain.ActionMessage;
 import net.solarnetwork.ocpp.domain.BasicActionMessage;
 import net.solarnetwork.ocpp.domain.ChargePointIdentity;
+import net.solarnetwork.ocpp.domain.ChargePointSessionIdentity;
 import net.solarnetwork.ocpp.domain.ErrorCode;
 import net.solarnetwork.ocpp.domain.ErrorCodeException;
 import net.solarnetwork.ocpp.domain.ErrorHolder;
@@ -114,7 +117,7 @@ import net.solarnetwork.settings.SettingsChangeObserver;
  * @param <S>
  *        the central system action enumeration to use
  * @author matt
- * @version 2.5
+ * @version 2.6
  */
 public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> & Action>
 		extends AbstractWebSocketHandler
@@ -132,11 +135,18 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 	/** An executor. */
 	protected final AsyncTaskExecutor executor;
 
+	// A NavigableMap map is used here because the methods afterConnectionEstablished and afterConnectionClosed
+	// is not called strictly in order of time, and so a Map<ChargePointIdentity, WebSocketSession> cannot
+	// be safely used as multiple WebSocketSessions may exist for the same identity. To work with this,
+	// a NavigableMap with ChargePointSessionIdentity keys is used, so we can still quickly find the
+	// session(s) associated with a ChargePointIdentity via a tail-submap starting with a "boundary" key
+	// having the user and session values as empty strings, which sort before all others.
+	private final ConcurrentNavigableMap<ChargePointSessionIdentity, WebSocketSession> clientSessions;
+
 	private final Class<C> chargePointActionClass;
 	private final Class<S> centralSystemActionClass;
 	private final ErrorCodeResolver errorCodeResolver;
 	private final Map<Action, Set<ActionMessageProcessor<Object, Object>>> processors;
-	private final ConcurrentMap<ChargePointIdentity, WebSocketSession> clientSessions;
 	private final ActionMessageQueue pendingMessages;
 	private final ObjectMapper mapper;
 	private final List<String> subProtocols;
@@ -181,7 +191,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 		this.errorCodeResolver = errorCodeResolver;
 		this.executor = executor;
 		this.processors = new ConcurrentHashMap<>(16, 0.9f, 1);
-		this.clientSessions = new ConcurrentHashMap<>(8, 0.7f, 2);
+		this.clientSessions = new ConcurrentSkipListMap<>();
 		this.pendingMessages = new SimpleActionMessageQueue();
 		this.mapper = mapper;
 		this.subProtocols = Arrays.asList(subProtocols != null ? subProtocols
@@ -230,7 +240,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 				: new String[] { WebSocketSubProtocol.OCPP_V16.getValue() });
 		this.pendingMessages = requireNonNullArgument(pendingMessageQueue, "pendingMessageQueue");
 		this.processors = new ConcurrentHashMap<>(16, 0.9f, 1);
-		this.clientSessions = new ConcurrentHashMap<>(8, 0.7f, 2);
+		this.clientSessions = new ConcurrentSkipListMap<>();
 		setCentralServiceActionPayloadDecoder(centralServiceActionPayloadDecoder);
 		setChargePointActionPayloadDecoder(chargePointActionPayloadDecoder);
 	}
@@ -254,6 +264,16 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 			configurationChanged(null);
 		}
 		started = true;
+	}
+
+	/**
+	 * Test if the service has been started.
+	 *
+	 * @return {@literal true} if the service has been started
+	 * @since 2.6
+	 */
+	public boolean isStarted() {
+		return started;
 	}
 
 	/**
@@ -391,21 +411,26 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 		@Override
 		public void run() {
 			int count = 0;
-			for ( Entry<ChargePointIdentity, WebSocketSession> me : clientSessions.entrySet() ) {
-				WebSocketSession wss = me.getValue();
-				Session s = null;
+			for ( WebSocketSession wss : clientSessions.values() ) {
+				final Session s;
 				if ( wss instanceof NativeWebSocketSession ) {
 					s = ((NativeWebSocketSession) wss).getNativeSession(Session.class);
+				} else {
+					s = null;
 				}
 				if ( s == null ) {
 					continue;
 				}
+				final ChargePointIdentity ident = clientId(wss);
+				if ( ident == null ) {
+					continue;
+				}
 				if ( s.isOpen() ) {
 					try {
-						executor.execute(new PingTask(me.getKey(), s));
+						executor.execute(new PingTask(ident, s));
 						count++;
 					} catch ( TaskRejectedException e ) {
-						log.warn("Unable to schedule PING task for charge point {}: {}", me.getKey(), e);
+						log.warn("Unable to schedule PING task for charge point {}: {}", ident, e);
 					}
 				}
 			}
@@ -451,7 +476,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 		// save client session association
 		ChargePointIdentity clientId = clientId(session);
 		if ( clientId != null ) {
-			clientSessions.put(clientId, session);
+			clientSessions.put(new ChargePointSessionIdentity(clientId, session.getId()), session);
 		}
 	}
 
@@ -460,7 +485,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 		// remove client session association
 		ChargePointIdentity clientId = clientId(session);
 		if ( clientId != null ) {
-			clientSessions.remove(clientId, session);
+			clientSessions.remove(new ChargePointSessionIdentity(clientId, session.getId()));
 		}
 	}
 
@@ -632,12 +657,13 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 
 	@Override
 	public Set<ChargePointIdentity> availableChargePointsIds() {
-		return clientSessions.keySet();
+		return clientSessions.keySet().stream().map(ChargePointSessionIdentity::getIdentity)
+				.collect(Collectors.toSet());
 	}
 
 	@Override
 	public boolean isChargePointAvailable(ChargePointIdentity clientId) {
-		return clientSessions.containsKey(clientId);
+		return clientSessions.ceilingKey(ChargePointSessionIdentity.boundaryKey(clientId)) != null;
 	}
 
 	@Override
@@ -656,13 +682,54 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 		return false;
 	}
 
+	/**
+	 * Get the session associated with a client ID.
+	 *
+	 * <p>
+	 * Note that it is possible for multiple sessions to exist for the same
+	 * client ID, so this method attempts to return the first open session
+	 * available.
+	 * </p>
+	 *
+	 * @param clientId
+	 *        the client ID to find the session for
+	 * @return the associated session, or {@literal null} if none available
+	 */
+	protected final WebSocketSession sessionForChargePoint(ChargePointIdentity clientId) {
+		if ( clientId == null ) {
+			return null;
+		}
+		Entry<ChargePointSessionIdentity, WebSocketSession> e = clientSessions
+				.ceilingEntry(ChargePointSessionIdentity.boundaryKey(clientId));
+		if ( e != null ) {
+			// verify key for same client
+			if ( !e.getKey().getIdentity().equals(clientId) ) {
+				return null;
+			}
+			// verify session is open, and if not see if there is another, open session for same client
+			for ( Entry<ChargePointSessionIdentity, WebSocketSession> e2 = clientSessions.higherEntry(
+					e.getKey()); e2 != null; e2 = clientSessions.higherEntry(e2.getKey()) ) {
+				if ( !e2.getKey().getIdentity().equals(clientId) ) {
+					// moved to another client, so stop looking
+					break;
+				} else if ( e2.getValue().isOpen() ) {
+					// found open session, so use that
+					e = e2;
+					break;
+				}
+			}
+		}
+		return (e != null ? e.getValue() : null);
+	}
+
 	@SuppressWarnings("unchecked")
 	@Override
 	public <T, R> boolean sendMessageToChargePoint(ActionMessage<T> message,
 			ActionMessageResultHandler<T, R> resultHandler) {
 		final ChargePointIdentity clientId = message.getClientId();
-		if ( clientId == null || !clientSessions.containsKey(clientId) ) {
-			log.debug("Client ID [{}] not available; ignoring message {}", clientId, message);
+		final WebSocketSession session = sessionForChargePoint(clientId);
+		if ( session == null ) {
+			log.debug("Client ID [{}] not available; discarding outbound message {}", clientId, message);
 			return false;
 		}
 		// drop generics now for internal processing
@@ -683,7 +750,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 	private void sendCall(PendingActionMessage msg) {
 		final ActionMessage<Object> message = msg.getMessage();
 		final ActionMessageResultHandler<Object, Object> resultHandler = msg.getHandler();
-		WebSocketSession session = clientSessions.get(message.getClientId());
+		final WebSocketSession session = sessionForChargePoint(message.getClientId());
 		if ( session == null ) {
 			log.debug("Web socket not available for CallMessage {}; ignoring", message);
 			return;
@@ -996,7 +1063,7 @@ public class OcppWebSocketHandler<C extends Enum<C> & Action, S extends Enum<S> 
 			final Action action = message.getAction();
 			final ChargePointIdentity clientId = message.getClientId();
 			final String messageId = message.getMessageId();
-			final WebSocketSession session = clientSessions.get(clientId);
+			final WebSocketSession session = sessionForChargePoint(clientId);
 			if ( session == null ) {
 				log.debug("Web socket not available for client {}; ignoring ActionMessage {}", clientId,
 						message);
