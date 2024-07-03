@@ -33,6 +33,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.Map;
+import java.util.UUID;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.After;
@@ -103,6 +104,8 @@ public class OcppWebSocketHandlerV201Tests {
 		final ChargePointIdentity cpIdent = new ChargePointIdentity("foo", "user");
 		final Map<String, Object> sessionAttributes = Collections
 				.singletonMap(OcppWebSocketHandshakeInterceptor.CLIENT_ID_ATTR, cpIdent);
+		final String sessionId = UUID.randomUUID().toString();
+		expect(session.getId()).andReturn(sessionId).anyTimes();
 		expect(session.getAttributes()).andReturn(sessionAttributes).anyTimes();
 		handler.addActionMessageProcessor(new HeartbeatProcessor(fixed));
 
@@ -131,6 +134,8 @@ public class OcppWebSocketHandlerV201Tests {
 		final ChargePointIdentity cpIdent = new ChargePointIdentity("foo", "user");
 		final Map<String, Object> sessionAttributes = Collections
 				.singletonMap(OcppWebSocketHandshakeInterceptor.CLIENT_ID_ATTR, cpIdent);
+		final String sessionId = UUID.randomUUID().toString();
+		expect(session.getId()).andReturn(sessionId).anyTimes();
 		expect(session.getAttributes()).andReturn(sessionAttributes).anyTimes();
 		handler.addActionMessageProcessor(new HeartbeatProcessor(fixed));
 		handler.addActionMessageProcessor(new HeartbeatProcessor(fixed) {
@@ -168,6 +173,8 @@ public class OcppWebSocketHandlerV201Tests {
 		final ChargePointIdentity cpIdent = new ChargePointIdentity("foo", "user");
 		final Map<String, Object> sessionAttributes = Collections
 				.singletonMap(OcppWebSocketHandshakeInterceptor.CLIENT_ID_ATTR, cpIdent);
+		final String sessionId = UUID.randomUUID().toString();
+		expect(session.getId()).andReturn(sessionId).anyTimes();
 		expect(session.getAttributes()).andReturn(sessionAttributes).anyTimes();
 		handler.addActionMessageProcessor(new HeartbeatProcessor(fixed) {
 
@@ -204,6 +211,8 @@ public class OcppWebSocketHandlerV201Tests {
 		final ChargePointIdentity cpIdent = new ChargePointIdentity("foo", "user");
 		final Map<String, Object> sessionAttributes = Collections
 				.singletonMap(OcppWebSocketHandshakeInterceptor.CLIENT_ID_ATTR, cpIdent);
+		final String sessionId = UUID.randomUUID().toString();
+		expect(session.getId()).andReturn(sessionId).anyTimes();
 		expect(session.getAttributes()).andReturn(sessionAttributes).anyTimes();
 		handler.addActionMessageProcessor(new HeartbeatProcessor(fixed));
 
