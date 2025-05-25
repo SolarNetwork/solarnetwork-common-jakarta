@@ -3,7 +3,7 @@ Bundle-ManifestVersion: 2
 Bundle-Name: OCPP 1.6 Core Support (Jakarta EE)
 Bundle-Description: Support for OCPP 1.6 service implementations using Jakarta EE.
 Bundle-SymbolicName: net.solarnetwork.common.ocpp.v16.jakarta
-Bundle-Version: 4.0.3
+Bundle-Version: 4.0.4
 Bundle-Vendor: SolarNetwork
 Automatic-Module-Name: net.solarnetwork.common.ocpp.v16.jakarta
 Bundle-RequiredExecutionEnvironment: JavaSE-17
@@ -58,8 +58,8 @@ Import-Package:
  javax.xml.parsers,
  javax.xml.validation,
  net.solarnetwork.codec;version="[2.0,3.0)",
- net.solarnetwork.dao;version="[2.0,3.0)",
- net.solarnetwork.domain;version="[2.0,3.0)",
+ net.solarnetwork.dao;version="[2.0,4.0)",
+ net.solarnetwork.domain;version="[2.0,4.0)",
  net.solarnetwork.ocpp.dao;version="[3.0,4.0)",
  net.solarnetwork.ocpp.domain;version="[3.0,4.0)",
  net.solarnetwork.ocpp.json;version="[1.0,2.0)",
