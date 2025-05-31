@@ -3,7 +3,7 @@ Bundle-ManifestVersion: 2
 Bundle-Name: OCPP 1.6 Core Support (Jakarta EE)
 Bundle-Description: Support for OCPP 1.6 service implementations using Jakarta EE.
 Bundle-SymbolicName: net.solarnetwork.common.ocpp.v16.jakarta
-Bundle-Version: 4.0.4
+Bundle-Version: 5.0.0
 Bundle-Vendor: SolarNetwork
 Automatic-Module-Name: net.solarnetwork.common.ocpp.v16.jakarta
 Bundle-RequiredExecutionEnvironment: JavaSE-17
@@ -29,13 +29,11 @@ Export-Package:
    net.solarnetwork.ocpp.json,
    net.solarnetwork.ocpp.xml.jakarta.support,
    com.fasterxml.jackson.databind",
- net.solarnetwork.ocpp.xml.jakarta.support;version="1.0.0";
+ net.solarnetwork.ocpp.xml.jakarta.support;version="2.0.0";
   uses:="javax.xml.validation,
    jakarta.xml.bind,
    javax.xml.namespace,
-   javax.xml.datatype,
-   jakarta.xml.ws.handler.soap,
-   jakarta.xml.ws.handler"
+   javax.xml.datatype"
 Import-Package: 
  com.fasterxml.jackson.annotation;version="[2.15,3.0)",
  com.fasterxml.jackson.core;version="[2.15,3.0)",
@@ -43,14 +41,9 @@ Import-Package:
  com.fasterxml.jackson.databind.util;version="[2.15,3.0)",
  com.fasterxml.jackson.module.jakarta.xmlbind;version="[2.15,3.0)",
  jakarta.activation,
- jakarta.jws,
- jakarta.jws.soap,
  jakarta.xml.bind,
  jakarta.xml.bind.annotation,
  jakarta.xml.soap,
- jakarta.xml.ws,
- jakarta.xml.ws.handler,
- jakarta.xml.ws.handler.soap,
  javax.crypto;resolution:=optional,
  javax.crypto.spec;resolution:=optional,
  javax.xml.datatype,
